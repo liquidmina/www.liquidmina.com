@@ -4,6 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LiquidMINA - Making Staked MINA Liquid Again</title>
+<link rel="manifest" href="/site.webmanifest">
+<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon-180x180.png">
+<meta name="canonical" content="https://www.liquidmina.com">
+<meta name="theme-color" content="#080e1ab8">
+<meta name="description" content="LiquidMINA - Making Staked MINA Liquid Again">
+<meta name="keywords" content="LiquidMINA, MINA, Staking, DeFi, Liquidity">
+<meta property="og:site_name" content="LiquidMINA">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en">
+<meta property="og:title" content="LiquidMINA">
+<meta property="og:url" content="https://www.liquidmina.com">
+<meta property="og:image" content="/favicon-192x192.png">
+<meta property="og:description" content="LiquidMINA - Making Staked MINA Liquid Again">
+<meta property="twitter:card" content="summary">
+<meta property="twitter:title" content="LiquidMINA">
+<meta property="twitter:image" content="/favicon-192x192.png">
+<meta property="twitter:description" content="LiquidMINA - Making Staked MINA Liquid Again">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
 
@@ -324,47 +345,6 @@ const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
 }, { threshold: .15 });
 document.querySelectorAll('.feat-card,.moat-card').forEach(el => observer.observe(el));
-
-// ══════════════════════════════ PAGE CANVASES ══════════════════════════════
-function startPageCanvas(name) {
-  const canvasId = name === 'hiw' ? 'hiw-canvas' : name === 'tokenomics' ? 'tok-canvas' : 'sec-canvas';
-  const pc = document.getElementById(canvasId);
-  if(!pc) return;
-  const pctx = pc.getContext('2d');
-  let pW, pH, pFrame=0, pGlowX, pGlowY, pTargetGlowX, pTargetGlowY;
-  const pParticles=[], pLines=[];
-  const col1 = name==='security' ? '#ff6b6b' : name==='tokenomics' ? '#00d4aa' : '#6ab4ff';
-  const col2 = name==='security' ? '#ff9f43' : name==='tokenomics' ? '#4d9fff' : '#00d4aa';
-
-  function pr() { pW=pc.width=window.innerWidth; pH=pc.height=window.innerHeight; if(pGlowX===undefined){pGlowX=pW*.5;pGlowY=pH*.3;pTargetGlowX=pGlowX;pTargetGlowY=pGlowY;} }
-  pr(); window.addEventListener('resize',pr); window.addEventListener('mousemove',e=>{pTargetGlowX=e.clientX;pTargetGlowY=e.clientY;});
-
-  class PP { constructor(){this.reset();} reset(){ this.x=Math.random()*pW;this.y=Math.random()*pH;this.size=Math.random()*1.3+.2;this.sx=(Math.random()-.5)*.28;this.sy=(Math.random()-.5)*.28;this.op=Math.random()*.3+.05;this.life=0;this.ml=Math.random()*250+150;this.col=Math.random()<.5?col1:col2;} update(){this.x+=this.sx;this.y+=this.sy;this.life++;if(this.x<0||this.x>pW||this.y<0||this.y>pH||this.life>this.ml)this.reset();} draw(){const f=this.life<30?this.life/30:this.life>this.ml-30?(this.ml-this.life)/30:1;pctx.globalAlpha=this.op*f;pctx.beginPath();pctx.arc(this.x,this.y,this.size,0,Math.PI*2);pctx.fillStyle=this.col;pctx.fill();} }
-  class PL { constructor(){this.reset();} reset(){this.x=Math.random()*pW;this.y=-30;this.speed=Math.random()*.6+.2;this.op=Math.random()*.06+.01;this.len=Math.random()*80+30;} update(){this.y+=this.speed;if(this.y>pH+120)this.reset();} draw(){pctx.globalAlpha=this.op;pctx.strokeStyle='#2979ff';pctx.lineWidth=1;pctx.beginPath();pctx.moveTo(this.x,this.y);pctx.lineTo(this.x,this.y+this.len);pctx.stroke();} }
-
-  for(let i=0;i<110;i++) pParticles.push(new PP());
-  for(let i=0;i<16;i++){const l=new PL();l.y=Math.random()*pH;pLines.push(l);}
-
-  function pDraw(){
-    pFrame++;
-    pctx.clearRect(0,0,pW,pH);
-    const bg2=pctx.createLinearGradient(0,0,pW,pH);
-    bg2.addColorStop(0,'#060c18'); bg2.addColorStop(.5,'#0a1424'); bg2.addColorStop(1,'#040810');
-    pctx.globalAlpha=1; pctx.fillStyle=bg2; pctx.fillRect(0,0,pW,pH);
-    pGlowX+=(pTargetGlowX-pGlowX)*.033; pGlowY+=(pTargetGlowY-pGlowY)*.033;
-    const rr=Math.min(pW,pH)*.48;
-    const gg=pctx.createRadialGradient(pGlowX,pGlowY,0,pGlowX,pGlowY,rr);
-    gg.addColorStop(0,'rgba(20,85,220,.14)'); gg.addColorStop(.4,'rgba(10,45,150,.07)'); gg.addColorStop(1,'rgba(0,0,0,0)');
-    pctx.fillStyle=gg; pctx.fillRect(0,0,pW,pH);
-    const pp=.09+Math.sin(pFrame*.009)*.03;
-    const gg2=pctx.createRadialGradient(pW*.5,pH*.22,0,pW*.5,pH*.22,pW*.36);
-    gg2.addColorStop(0,`rgba(12,75,210,${pp})`); gg2.addColorStop(1,'rgba(0,0,0,0)');
-    pctx.fillStyle=gg2; pctx.fillRect(0,0,pW,pH);
-    pctx.globalAlpha=1; pLines.forEach(l=>{l.update();l.draw()}); pParticles.forEach(p=>{p.update();p.draw()});
-    pctx.globalAlpha=1; requestAnimationFrame(pDraw);
-  }
-  pDraw();
-}
 </script>
 </body>
 </html>
