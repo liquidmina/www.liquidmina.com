@@ -282,6 +282,8 @@ let W, H, frame = 0;
 let glowX, glowY, targetGlowX, targetGlowY;
 let particles = [], dataLines = [];
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 function resize() {
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
@@ -317,7 +319,7 @@ class DataLine {
 for(let i=0;i<130;i++) particles.push(new Particle());
 for(let i=0;i<20;i++) { const dl=new DataLine(); dl.y=Math.random()*H; dataLines.push(dl); }
 
-function drawBg() {
+async function drawBg() {
   frame++;
   ctx.clearRect(0,0,W,H);
   const bg = ctx.createLinearGradient(0,0,W,H);
@@ -337,6 +339,7 @@ function drawBg() {
   hg.addColorStop(0,'rgba(0,0,0,0)'); hg.addColorStop(.5,`rgba(41,121,255,${.12+Math.sin(frame*.007)*.04})`); hg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.globalAlpha=1; ctx.fillStyle=hg; ctx.fillRect(W*.15,hy-1,W*.7,2);
   ctx.globalAlpha=1; requestAnimationFrame(drawBg);
+  await sleep(10);
 }
 drawBg();
 
