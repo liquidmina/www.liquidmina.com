@@ -276,72 +276,217 @@ footer {
 ═══════════════════════════════════════════════════ -->
 <script>
 // ══════════════════════════════ BACKGROUND CANVAS ══════════════════════════════
-const canvas = document.getElementById('bg-canvas');
-const ctx = canvas.getContext('2d');
-let W, H, frame = 0;
-let glowX, glowY, targetGlowX, targetGlowY;
-let particles = [], dataLines = [];
+const canvas = document.getElementById("bg-canvas");
+const gl = canvas.getContext("webgl");
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+if (!gl) {
+  console.warn("WebGL not supported");
+}
 
+// ===== Resize =====
+let W, H;
 function resize() {
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  if (glowX === undefined) { glowX = W*.5; glowY = H*.45; targetGlowX = glowX; targetGlowY = glowY; }
+  gl.viewport(0, 0, W, H);
 }
+window.addEventListener("resize", resize);
 resize();
-window.addEventListener('resize', resize);
-window.addEventListener('mousemove', e => { targetGlowX = e.clientX; targetGlowY = e.clientY; });
 
-class Particle {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = Math.random()*W; this.y = Math.random()*H;
-    this.size = Math.random()*1.4+.3;
-    this.speedX = (Math.random()-.5)*.22; this.speedY = (Math.random()-.5)*.22;
-    this.opacity = Math.random()*.35+.05;
-    this.life = 0; this.maxLife = Math.random()*300+200;
-    this.col = Math.random()<.5 ? '#6ab4ff' : '#00d4aa';
-  }
-  update() { this.x+=this.speedX; this.y+=this.speedY; this.life++; if(this.x<0||this.x>W||this.y<0||this.y>H||this.life>this.maxLife) this.reset(); }
-  draw() {
-    const f = this.life<30?this.life/30:this.life>this.maxLife-30?(this.maxLife-this.life)/30:1;
-    ctx.globalAlpha = this.opacity*f;
-    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2); ctx.fillStyle=this.col; ctx.fill();
-  }
-}
-class DataLine {
-  constructor() { this.reset(); }
-  reset() { this.x=Math.random()*W; this.y=-20; this.speed=Math.random()*.7+.25; this.opacity=Math.random()*.07+.02; this.length=Math.random()*70+20; }
-  update() { this.y+=this.speed; if(this.y>H+100) this.reset(); }
-  draw() { ctx.globalAlpha=this.opacity; ctx.strokeStyle='#2979ff'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(this.x,this.y+this.length); ctx.stroke(); }
-}
-for(let i=0;i<130;i++) particles.push(new Particle());
-for(let i=0;i<20;i++) { const dl=new DataLine(); dl.y=Math.random()*H; dataLines.push(dl); }
+// ===== Mouse glow =====
+let glowX = 0.5, glowY = 0.5;
+let targetX = 0.5, targetY = 0.5;
 
-async function drawBg() {
-  frame++;
-  ctx.clearRect(0,0,W,H);
-  const bg = ctx.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,'#080e1a'); bg.addColorStop(.5,'#0c1830'); bg.addColorStop(1,'#050a12');
-  ctx.globalAlpha=1; ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  glowX += (targetGlowX-glowX)*.038; glowY += (targetGlowY-glowY)*.038;
-  const r1=Math.min(W,H)*.52;
-  const g1=ctx.createRadialGradient(glowX,glowY,0,glowX,glowY,r1);
-  g1.addColorStop(0,'rgba(25,100,255,.16)'); g1.addColorStop(.4,'rgba(12,60,180,.08)'); g1.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=g1; ctx.fillRect(0,0,W,H);
-  const pulse=.11+Math.sin(frame*.011)*.04;
-  const g2=ctx.createRadialGradient(W*.5,H*.28,0,W*.5,H*.28,W*.38);
-  g2.addColorStop(0,`rgba(18,95,245,${pulse})`); g2.addColorStop(.5,`rgba(0,180,140,${pulse*.3})`); g2.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=g2; ctx.fillRect(0,0,W,H);
-  ctx.globalAlpha=1; dataLines.forEach(d=>{d.update();d.draw()}); particles.forEach(p=>{p.update();p.draw()});
-  const hy=H*.6, hg=ctx.createLinearGradient(W*.15,hy,W*.85,hy);
-  hg.addColorStop(0,'rgba(0,0,0,0)'); hg.addColorStop(.5,`rgba(41,121,255,${.12+Math.sin(frame*.007)*.04})`); hg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.globalAlpha=1; ctx.fillStyle=hg; ctx.fillRect(W*.15,hy-1,W*.7,2);
-  ctx.globalAlpha=1; requestAnimationFrame(drawBg);
-  await sleep(10);
+window.addEventListener("mousemove", e => {
+  targetX = e.clientX / W;
+  targetY = 1.0 - e.clientY / H;
+});
+
+// ===== Shader helpers =====
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  return s;
 }
-drawBg();
+
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  return p;
+}
+
+// ===== Fullscreen quad =====
+const quad = new Float32Array([
+  -1,-1, 1,-1, -1,1,
+  -1,1, 1,-1, 1,1
+]);
+
+const quadBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+// ===== BACKGROUND SHADER =====
+const bgProgram = program(`
+attribute vec2 a;
+void main(){ gl_Position = vec4(a,0,1); }
+`, `
+precision mediump float;
+
+uniform vec2 res;
+uniform float time;
+uniform vec2 glow;
+
+void main(){
+  vec2 uv = gl_FragCoord.xy / res;
+
+  // base gradient
+  vec3 col = mix(vec3(0.03,0.06,0.12), vec3(0.02,0.04,0.08), uv.y);
+
+  // cursor glow
+  float d = distance(uv, glow);
+  float g = smoothstep(0.5, 0.0, d);
+  col += vec3(0.1,0.3,1.0) * g * 0.6;
+
+  // pulse glow
+  float pulse = 0.12 + sin(time * 0.8) * 0.05;
+  float d2 = distance(uv, vec2(0.5,0.7));
+  col += vec3(0.0,0.7,0.6) * smoothstep(0.6, 0.0, d2) * pulse;
+
+  // horizon line
+  float line = smoothstep(0.44,0.5,uv.y) - smoothstep(0.5,0.56,uv.y);
+  col += vec3(0.08,0.18,0.38) * line * (0.06 + sin(time)*0.02);
+
+  gl_FragColor = vec4(col,1);
+}
+`);
+
+const aLoc = gl.getAttribLocation(bgProgram, "a");
+
+// ===== PARTICLES =====
+const COUNT = 120;
+let pos = new Float32Array(COUNT * 2);
+let size = new Float32Array(COUNT);
+let speed = new Float32Array(COUNT);
+
+function reset(i){
+  pos[i*2] = Math.random()*2-1;
+  pos[i*2+1] = Math.random()*2-1;
+  size[i] = Math.random()*2 + 1;
+  speed[i] = Math.random()*0.002 + 0.0005;
+}
+
+for(let i=0;i<COUNT;i++) reset(i);
+
+const pProgram = program(`
+attribute vec2 p;
+attribute float s;
+varying float vs;
+void main(){
+  vs = s;
+  gl_Position = vec4(p,0,1);
+  gl_PointSize = s * 3.0;
+}
+`, `
+precision mediump float;
+void main(){
+  float d = length(gl_PointCoord - 0.5);
+  float a = smoothstep(0.5,0.0,d);
+  vec3 c = mix(vec3(0.2,0.6,1.0), vec3(0.0,0.8,0.6), gl_FragCoord.y/800.0);
+  gl_FragColor = vec4(c, a * 0.6);
+}
+`);
+
+const pBuffer = gl.createBuffer();
+const sBuffer = gl.createBuffer();
+
+const pLoc = gl.getAttribLocation(pProgram, "p");
+const sLoc = gl.getAttribLocation(pProgram, "s");
+
+// ===== DATA LINES =====
+const LINES = 20;
+let lineX = new Float32Array(LINES);
+let lineY = new Float32Array(LINES);
+let lineSpeed = new Float32Array(LINES);
+
+for(let i=0;i<LINES;i++){
+  lineX[i] = Math.random()*2-1;
+  lineY[i] = Math.random()*2-1;
+  lineSpeed[i] = Math.random()*0.01 + 0.003;
+}
+
+// ===== RENDER =====
+let t = 0;
+
+function render(){
+  t += 0.016;
+
+  glowX += (targetX - glowX) * 0.05;
+  glowY += (targetY - glowY) * 0.05;
+
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  // ===== draw background =====
+  gl.useProgram(bgProgram);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.enableVertexAttribArray(aLoc);
+  gl.vertexAttribPointer(aLoc,2,gl.FLOAT,false,0,0);
+
+  gl.uniform2f(gl.getUniformLocation(bgProgram,"res"), W, H);
+  gl.uniform1f(gl.getUniformLocation(bgProgram,"time"), t);
+  gl.uniform2f(gl.getUniformLocation(bgProgram,"glow"), glowX, glowY);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  // ===== update particles =====
+  for(let i=0;i<COUNT;i++){
+    pos[i*2+1] -= speed[i];
+    if(pos[i*2+1] < -1) reset(i);
+  }
+
+  // ===== draw particles =====
+  gl.useProgram(pProgram);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, pBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(pLoc);
+  gl.vertexAttribPointer(pLoc,2,gl.FLOAT,false,0,0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, sBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, size, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(sLoc);
+  gl.vertexAttribPointer(sLoc,1,gl.FLOAT,false,0,0);
+
+  gl.drawArrays(gl.POINTS, 0, COUNT);
+
+  // ===== draw data lines =====
+  gl.lineWidth(1);
+
+  for(let i=0;i<LINES;i++){
+    lineY[i] -= lineSpeed[i];
+    if(lineY[i] < -1) lineY[i] = 1;
+
+    const lx = lineX[i];
+    const ly = lineY[i];
+
+    const verts = new Float32Array([
+      lx, ly,
+      lx, ly + 0.2
+    ]);
+
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+    gl.vertexAttribPointer(pLoc,2,gl.FLOAT,false,0,0);
+
+    gl.drawArrays(gl.LINES, 0, 2);
+  }
+
+  requestAnimationFrame(render);
+}
+
+render();
 
 // ══════════════════════════════ SCROLL ANIMATIONS ══════════════════════════════
 const observer = new IntersectionObserver((entries) => {
